@@ -1,28 +1,45 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import pandas as pd
-from textblob import TextBlob
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime
+import threading
+from textblob import TextBlob
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# ─── CORE FUNCTION ───────────────────────────────────────────────
-NEUTRAL_OVERRIDES = {"okay", "ok", "fine", "alright", "average", "moderate"}
+# Download VADER lexicon for better accuracy
+nltk.download('vader_lexicon', quiet=True)
 
-def get_sentiment(text):
-    if not isinstance(text, str) or text.strip() == "":
-        return "Neutral", 0.0
-    words = set(text.strip().lower().split())
-    if words & NEUTRAL_OVERRIDES and len(text.split()) <= 6:
-        return "Neutral", 0.0
-    analysis = TextBlob(str(text))
-    polarity = analysis.sentiment.polarity
-    if polarity > 0.2:
-        return "Positive", round(polarity, 3)
-    elif polarity < -0.2:
-        return "Negative", round(polarity, 3)
-    else:
-        return "Neutral", round(polarity, 3)
+# ─── CORE LOGIC ───────────────────────────────────────────────
+class SentimentEngine:
+    def __init__(self):
+        self.sia = SentimentIntensityAnalyzer()
+        self.neutral_overrides = {"okay", "ok", "fine", "alright", "average", "moderate"}
+
+    def analyze(self, text):
+        if not isinstance(text, str) or text.strip() == "":
+            return "Neutral", 0.0
+        
+        text_clean = text.strip()
+        words = set(text_clean.lower().split())
+        
+        # Fast-track neutrality for short, generic responses
+        if words & self.neutral_overrides and len(text_clean.split()) <= 6:
+            return "Neutral", 0.0
+        
+        # Using VADER for better handling of negations ("not good", "hardly great")
+        score = self.sia.polarity_scores(text_clean)['compound']
+        
+        if score >= 0.05:
+            return "Positive", round(score, 3)
+        elif score <= -0.05:
+            return "Negative", round(score, 3)
+        else:
+            return "Neutral", round(score, 3)
+
+engine = SentimentEngine()
 
 # ─── GENERATE CHART ──────────────────────────────────────────────
 def generate_chart(df, output_dir):
@@ -40,7 +57,53 @@ def generate_chart(df, output_dir):
     plt.close()
     return chart_path
 
-# ─── ANALYZE CSV ─────────────────────────────────────────────────
+# ─── ANALYZE CSV (THREADED) ──────────────────────────────────────
+def run_analysis_thread(df, selected_col, file_path, progress_bar, status_label):
+    try:
+        total_rows = len(df)
+        sentiments = []
+        scores = []
+
+        for i, text in enumerate(df[selected_col]):
+            sent, score = engine.analyze(text)
+            sentiments.append(sent)
+            scores.append(score)
+            
+            # Update progress bar every 10 rows to save CPU
+            if i % 10 == 0:
+                progress = int((i / total_rows) * 100)
+                progress_bar['value'] = progress
+                status_label.config(text=f"Processing: {progress}%")
+                root.update_idletasks()
+
+        df["Sentiment"] = sentiments
+        df["Polarity Score"] = scores
+
+        # Save output
+        output_dir = os.path.join(os.path.dirname(file_path), "sentiment_output")
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = os.path.join(output_dir, f"sentiment_result_{timestamp}.csv")
+        df.to_csv(out_path, index=False, encoding="utf-8-sig")
+
+        chart_path = generate_chart(df, output_dir)
+        
+        counts = df["Sentiment"].value_counts().to_dict()
+        
+        # Final UI Update back in main thread
+        root.after(0, lambda: messagebox.showinfo("✅ Done!", (
+            f"Analyzed {total_rows} rows\n\n"
+            f"😊 Positive: {counts.get('Positive', 0)}\n"
+            f"😐 Neutral:  {counts.get('Neutral', 0)}\n"
+            f"😠 Negative: {counts.get('Negative', 0)}\n\n"
+            f"Results saved to:\n{out_path}"
+        )))
+        root.after(0, lambda: status_label.config(text="Analysis Complete!"))
+        root.after(0, lambda: progress_bar.config(mode='determinate', value=0))
+
+    except Exception as e:
+        root.after(0, lambda: messagebox.showerror("Error", str(e)))
+
 def analyze_csv():
     file_path = filedialog.askopenfilename(
         title="Select CSV or Excel File",
@@ -55,68 +118,55 @@ def analyze_csv():
         else:
             df = pd.read_excel(file_path)
 
-        # Let user pick the text column
         columns = list(df.columns)
         col_window = tk.Toplevel(root)
         col_window.title("Select Text Column")
-        col_window.geometry("300x120")
-        tk.Label(col_window, text="Which column has the text?").pack(pady=10)
+        col_window.geometry("300x150")
+        col_window.configure(bg="#1e1e2e")
+        
+        tk.Label(col_window, text="Which column has the text?", bg="#1e1e2e", fg="#cdd6f4").pack(pady=10)
         col_var = tk.StringVar(value=columns[0])
         col_menu = ttk.Combobox(col_window, textvariable=col_var, values=columns, state="readonly")
-        col_menu.pack()
+        col_menu.pack(pady=5)
 
-        def confirm_col():
+        def start_analysis():
             selected_col = col_var.get()
             col_window.destroy()
+            
+            # Change UI to loading state
+            progress_bar.config(mode='determinate')
+            status_label.config(text="Starting analysis...")
+            
+            # RUN IN THREAD to prevent GUI freeze
+            thread = threading.Thread(target=run_analysis_thread, args=(df, selected_col, file_path, progress_bar, status_label), daemon=True)
+            thread.start()
 
-            df["Sentiment"], df["Polarity Score"] = zip(*df[selected_col].map(get_sentiment))
-
-            # Save output
-            output_dir = os.path.join(os.path.dirname(file_path), "sentiment_output")
-            os.makedirs(output_dir, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            out_path = os.path.join(output_dir, f"sentiment_result_{timestamp}.csv")
-            df.to_csv(out_path, index=False, encoding="utf-8-sig")
-
-            chart_path = generate_chart(df, output_dir)
-
-            counts = df["Sentiment"].value_counts().to_dict()
-            messagebox.showinfo("✅ Done!", (
-                f"Analyzed {len(df)} rows\n\n"
-                f"😊 Positive: {counts.get('Positive', 0)}\n"
-                f"😐 Neutral:  {counts.get('Neutral', 0)}\n"
-                f"😠 Negative: {counts.get('Negative', 0)}\n\n"
-                f"Results saved to:\n{out_path}\n\n"
-                f"Chart saved to:\n{chart_path}"
-            ))
-
-        tk.Button(col_window, text="Analyze", command=confirm_col, bg="#4CAF50", fg="white").pack(pady=10)
+        tk.Button(col_window, text="Analyze Now", command=start_analysis, bg="#4CAF50", fg="white", relief="flat").pack(pady=15)
 
     except Exception as e:
         messagebox.showerror("Error", str(e))
 
-# ─── ANALYZE SINGLE TEXT ─────────────────────────────────────────
 def analyze_text():
     text = text_input.get("1.0", tk.END).strip()
     if not text:
         messagebox.showwarning("Empty", "Please enter some text first.")
         return
-    sentiment, score = get_sentiment(text)
+    sentiment, score = engine.analyze(text)
     emoji = {"Positive": "😊", "Negative": "😠", "Neutral": "😐"}[sentiment]
     result_label.config(text=f"{emoji} {sentiment}  |  Score: {score}")
 
 # ─── GUI ─────────────────────────────────────────────────────────
 root = tk.Tk()
-root.title("Sentiment Analyzer — by Anuj")
-root.geometry("500x420")
+root.title("Sentiment Analyzer Pro — by Anuj")
+root.geometry("500x500")
 root.resizable(False, False)
 root.configure(bg="#1e1e2e")
 
-tk.Label(root, text="💬 Sentiment Analyzer", font=("Arial", 16, "bold"),
+tk.Label(root, text="💬 Sentiment Analyzer", font=("Arial", 18, "bold"),
          bg="#1e1e2e", fg="#cdd6f4").pack(pady=15)
 
 tk.Label(root, text="Type or paste text below:", bg="#1e1e2e", fg="#a6adc8").pack()
-text_input = tk.Text(root, height=6, width=55, font=("Arial", 11),
+text_input = tk.Text(root, height=5, width=55, font=("Arial", 11),
                      bg="#313244", fg="#cdd6f4", insertbackground="white",
                      relief="flat", padx=8, pady=8)
 text_input.pack(pady=8)
@@ -131,12 +181,18 @@ result_label.pack(pady=10)
 
 tk.Label(root, text="─" * 55, bg="#1e1e2e", fg="#45475a").pack()
 
-tk.Label(root, text="Or analyze a whole CSV / Excel file:", bg="#1e1e2e", fg="#a6adc8").pack(pady=5)
+tk.Label(root, text="Bulk Analysis:", bg="#1e1e2e", fg="#a6adc8").pack(pady=5)
 tk.Button(root, text="📂 Upload CSV / Excel File", command=analyze_csv,
           bg="#a6e3a1", fg="#1e1e2e", font=("Arial", 11, "bold"),
           relief="flat", padx=20, pady=6).pack(pady=5)
 
-tk.Label(root, text="Built with Python + TextBlob + Tkinter",
+# Progress Section
+status_label = tk.Label(root, text="Idle", bg="#1e1e2e", fg="#585b70", font=("Arial", 10))
+status_label.pack(pady=(15, 0))
+progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="indeterminate")
+progress_bar.pack(pady=5)
+
+tk.Label(root, text="Powered by VADER & TextBlob",
          bg="#1e1e2e", fg="#585b70", font=("Arial", 9)).pack(side="bottom", pady=8)
 
 root.mainloop()
