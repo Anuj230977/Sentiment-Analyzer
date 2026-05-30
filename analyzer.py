@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 import threading
-from textblob import TextBlob
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
@@ -69,12 +68,12 @@ def run_analysis_thread(df, selected_col, file_path, progress_bar, status_label)
             sentiments.append(sent)
             scores.append(score)
             
-            # Update progress bar every 10 rows to save CPU
+            # Update progress bar every 10 rows to save CPU (Thread-Safe)
             if i % 10 == 0:
                 progress = int((i / total_rows) * 100)
-                progress_bar['value'] = progress
-                status_label.config(text=f"Processing: {progress}%")
-                root.update_idletasks()
+                # Pass a sticky note to the main thread to safely update the UI
+                root.after(0, lambda p=progress: progress_bar.configure(value=p))
+                root.after(0, lambda p=progress: status_label.config(text=f"Processing: {p}%"))
 
         df["Sentiment"] = sentiments
         df["Polarity Score"] = scores
@@ -192,7 +191,7 @@ status_label.pack(pady=(15, 0))
 progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="indeterminate")
 progress_bar.pack(pady=5)
 
-tk.Label(root, text="Powered by VADER & TextBlob",
+tk.Label(root, text="Powered by VADER",
          bg="#1e1e2e", fg="#585b70", font=("Arial", 9)).pack(side="bottom", pady=8)
 
 root.mainloop()
