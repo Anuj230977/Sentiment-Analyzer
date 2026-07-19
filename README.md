@@ -1,6 +1,7 @@
 # 💬 Sentiment Analyzer
 
-A Python desktop tool that analyzes the sentiment of text — whether it's **Positive**, **Negative**, or **Neutral** — using Natural Language Processing (NLP).
+A Python desktop tool that analyzes text as **Positive**, **Negative**, or
+**Neutral** using Natural Language Processing (NLP).
 
 Built for businesses and individuals who want to understand how people feel about their products, services, or content.
 
@@ -8,11 +9,12 @@ Built for businesses and individuals who want to understand how people feel abou
 
 ## 🖼️ What It Does
 
-- **Single Text Analysis** — Type or paste any text and get instant sentiment feedback
-- **Bulk CSV / Excel Analysis** — Upload a file with hundreds of reviews and analyze all rows at once
-- **Visual Report** — Generates a pie chart showing the sentiment distribution
-- **Output File** — Saves results as a clean CSV with Sentiment + Polarity Score columns
-- **Simple GUI** — No coding needed, just click and analyze
+- **Single Text Analysis** - Type or paste any text and get instant sentiment feedback
+- **Bulk CSV / Excel Analysis** - Upload a file with hundreds of reviews and analyze all rows at once
+- **Visual Report** - Generates a pie chart showing the sentiment distribution
+- **Output File** - Saves results as a clean CSV with Sentiment + Polarity Score columns
+- **Simple GUI** - No coding needed, just click and analyze
+- **Smart Text Column Defaults** - Auto-selects common review and social export columns such as `review_text`, `tweet_text`, and `Tweet Text`
 
 ---
 
@@ -26,6 +28,16 @@ Built for businesses and individuals who want to understand how people feel abou
 | I love it so much | Positive | 0.35 |
 | Terrible quality never buying again | Negative | -1.0 |
 
+For bulk uploads, the app prioritizes `review_text`, `tweet_text`, and
+`full_text` before generic aliases such as `review`, `comment`, `comments`,
+`content`, `message`, and `text`. Normalization also accepts spaces,
+underscores, hyphens, and letter-case differences. Xquik exports using the
+canonical `text` field work directly, while the additional aliases support
+transformed social datasets. You can still choose any column manually.
+
+Xquik is an independent third-party service. Not affiliated with X Corp.
+"Twitter" and "X" are trademarks of X Corp.
+
 ---
 
 ## 🛠️ Tech Stack
@@ -33,8 +45,7 @@ Built for businesses and individuals who want to understand how people feel abou
 | Tool | Purpose |
 |---|---|
 | Python 3.12 | Core language |
-| TextBlob | NLP sentiment analysis |
-| NLTK | Language processing backend |
+| NLTK VADER | NLP sentiment analysis |
 | Pandas | CSV/Excel reading and processing |
 | Matplotlib | Pie chart generation |
 | Tkinter | Desktop GUI |
@@ -52,12 +63,12 @@ cd sentiment-analyzer
 
 ### 2. Install dependencies
 ```bash
-pip install textblob nltk pandas matplotlib openpyxl
+pip install nltk pandas matplotlib openpyxl
 ```
 
 ### 3. Download NLTK data (one-time only)
 ```bash
-python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('punkt_tab')"
+python -c "import nltk; nltk.download('vader_lexicon')"
 ```
 
 ### 4. Run the app
@@ -81,23 +92,24 @@ sentiment-analyzer/
 
 ## 💡 Use Cases
 
-- **E-commerce businesses** — Analyze customer reviews in bulk
-- **Restaurants / Hotels** — Understand feedback from review exports
-- **HR Teams** — Analyze employee survey responses
-- **Students** — NLP project for data analytics coursework
-- **Content Creators** — Analyze comment sections from YouTube/Instagram
+- **E-commerce businesses** - Analyze customer reviews in bulk
+- **Restaurants / Hotels** - Understand feedback from review exports
+- **HR Teams** - Analyze employee survey responses
+- **Students** - NLP project for data analytics coursework
+- **Content Creators** - Analyze comment sections from YouTube/Instagram
 
 ---
 
 ## 📊 How Sentiment Scoring Works
 
-TextBlob assigns a **polarity score** between **-1.0 and +1.0** to every piece of text:
+VADER assigns a **compound score** between **-1.0 and +1.0** to every piece of
+text:
 
 | Score Range | Sentiment |
 |---|---|
-| > 0.2 | 😊 Positive |
-| -0.2 to 0.2 | 😐 Neutral |
-| < -0.2 | 😠 Negative |
+| >= 0.05 | 😊 Positive |
+| > -0.05 and < 0.05 | 😐 Neutral |
+| <= -0.05 | 😠 Negative |
 
 Common neutral words like *"okay", "fine", "alright"* in short phrases are automatically classified as Neutral regardless of score.
 
