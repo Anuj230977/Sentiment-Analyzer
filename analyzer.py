@@ -1,15 +1,13 @@
+from datetime import datetime
+import os
+import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
-from datetime import datetime
-import threading
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# Download VADER lexicon for better accuracy
-nltk.download('vader_lexicon', quiet=True)
+import matplotlib.pyplot as plt
+import nltk
+import pandas as pd
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 # ─── CORE LOGIC ───────────────────────────────────────────────
 class SentimentEngine:
@@ -38,7 +36,53 @@ class SentimentEngine:
         else:
             return "Neutral", round(score, 3)
 
-engine = SentimentEngine()
+TEXT_COLUMN_ALIASES = (
+    "review text",
+    "tweet text",
+    "full text",
+    "review",
+    "comment",
+    "comments",
+    "content",
+    "message",
+    "text",
+)
+
+engine = None
+root = None
+text_input = None
+result_label = None
+status_label = None
+progress_bar = None
+
+
+def get_engine():
+    global engine
+    if engine is not None:
+        return engine
+    try:
+        engine = SentimentEngine()
+    except LookupError:
+        nltk.download("vader_lexicon", quiet=True)
+        engine = SentimentEngine()
+    return engine
+
+
+def normalize_column_name(column):
+    return str(column).strip().lower().replace("-", " ").replace("_", " ")
+
+
+def default_text_column(columns):
+    lookup = {normalize_column_name(column): column for column in columns}
+    for alias in TEXT_COLUMN_ALIASES:
+        if alias in lookup:
+            return lookup[alias]
+    return columns[0] if columns else ""
+
+
+def non_empty_text_rows(df, selected_col):
+    text_values = df[selected_col].fillna("").astype(str).str.strip()
+    return df.loc[text_values != ""].copy()
 
 # ─── GENERATE CHART ──────────────────────────────────────────────
 def generate_chart(df, output_dir):
@@ -59,17 +103,24 @@ def generate_chart(df, output_dir):
 # ─── ANALYZE CSV (THREADED) ──────────────────────────────────────
 def run_analysis_thread(df, selected_col, file_path, progress_bar, status_label):
     try:
+        df = non_empty_text_rows(df, selected_col)
+        if df.empty:
+            root.after(0, lambda: messagebox.showwarning("No Text Rows", "No non-empty text rows found."))
+            root.after(0, lambda: status_label.config(text="Idle"))
+            root.after(0, lambda: progress_bar.config(mode='determinate', value=0))
+            return
+
         total_rows = len(df)
         sentiments = []
         scores = []
 
-        for i, text in enumerate(df[selected_col]):
-            sent, score = engine.analyze(text)
+        for i, text in enumerate(df[selected_col].astype(str), start=1):
+            sent, score = get_engine().analyze(text)
             sentiments.append(sent)
             scores.append(score)
             
             # Update progress bar every 10 rows to save CPU (Thread-Safe)
-            if i % 10 == 0:
+            if i % 10 == 0 or i == total_rows:
                 progress = int((i / total_rows) * 100)
                 # Pass a sticky note to the main thread to safely update the UI
                 root.after(0, lambda p=progress: progress_bar.configure(value=p))
@@ -85,7 +136,7 @@ def run_analysis_thread(df, selected_col, file_path, progress_bar, status_label)
         out_path = os.path.join(output_dir, f"sentiment_result_{timestamp}.csv")
         df.to_csv(out_path, index=False, encoding="utf-8-sig")
 
-        chart_path = generate_chart(df, output_dir)
+        generate_chart(df, output_dir)
         
         counts = df["Sentiment"].value_counts().to_dict()
         
@@ -101,7 +152,13 @@ def run_analysis_thread(df, selected_col, file_path, progress_bar, status_label)
         root.after(0, lambda: progress_bar.config(mode='determinate', value=0))
 
     except Exception as e:
-        root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        root.after(
+            0,
+            lambda error_message=str(e): messagebox.showerror(
+                "Error",
+                error_message,
+            ),
+        )
 
 def analyze_csv():
     file_path = filedialog.askopenfilename(
@@ -118,13 +175,17 @@ def analyze_csv():
             df = pd.read_excel(file_path)
 
         columns = list(df.columns)
+        if not columns:
+            messagebox.showerror("Error", "The file does not contain any columns.")
+            return
+
         col_window = tk.Toplevel(root)
         col_window.title("Select Text Column")
         col_window.geometry("300x150")
         col_window.configure(bg="#1e1e2e")
         
         tk.Label(col_window, text="Which column has the text?", bg="#1e1e2e", fg="#cdd6f4").pack(pady=10)
-        col_var = tk.StringVar(value=columns[0])
+        col_var = tk.StringVar(value=default_text_column(columns))
         col_menu = ttk.Combobox(col_window, textvariable=col_var, values=columns, state="readonly")
         col_menu.pack(pady=5)
 
@@ -150,48 +211,68 @@ def analyze_text():
     if not text:
         messagebox.showwarning("Empty", "Please enter some text first.")
         return
-    sentiment, score = engine.analyze(text)
+    sentiment, score = get_engine().analyze(text)
     emoji = {"Positive": "😊", "Negative": "😠", "Neutral": "😐"}[sentiment]
     result_label.config(text=f"{emoji} {sentiment}  |  Score: {score}")
 
 # ─── GUI ─────────────────────────────────────────────────────────
-root = tk.Tk()
-root.title("Sentiment Analyzer Pro — by Anuj")
-root.geometry("500x500")
-root.resizable(False, False)
-root.configure(bg="#1e1e2e")
+def build_gui():
+    global root, text_input, result_label, status_label, progress_bar
 
-tk.Label(root, text="💬 Sentiment Analyzer", font=("Arial", 18, "bold"),
-         bg="#1e1e2e", fg="#cdd6f4").pack(pady=15)
+    root = tk.Tk()
+    root.title("Sentiment Analyzer Pro - by Anuj")
+    root.geometry("500x500")
+    root.resizable(False, False)
+    root.configure(bg="#1e1e2e")
 
-tk.Label(root, text="Type or paste text below:", bg="#1e1e2e", fg="#a6adc8").pack()
-text_input = tk.Text(root, height=5, width=55, font=("Arial", 11),
-                     bg="#313244", fg="#cdd6f4", insertbackground="white",
-                     relief="flat", padx=8, pady=8)
-text_input.pack(pady=8)
+    tk.Label(root, text="💬 Sentiment Analyzer", font=("Arial", 18, "bold"),
+             bg="#1e1e2e", fg="#cdd6f4").pack(pady=15)
 
-tk.Button(root, text="Analyze Text", command=analyze_text,
-          bg="#89b4fa", fg="#1e1e2e", font=("Arial", 11, "bold"),
-          relief="flat", padx=20, pady=6).pack(pady=5)
+    tk.Label(root, text="Type or paste text below:", bg="#1e1e2e", fg="#a6adc8").pack()
+    text_input = tk.Text(root, height=5, width=55, font=("Arial", 11),
+                         bg="#313244", fg="#cdd6f4", insertbackground="white",
+                         relief="flat", padx=8, pady=8)
+    text_input.pack(pady=8)
 
-result_label = tk.Label(root, text="Result will appear here",
-                        font=("Arial", 13), bg="#1e1e2e", fg="#a6e3a1")
-result_label.pack(pady=10)
+    tk.Button(root, text="Analyze Text", command=analyze_text,
+              bg="#89b4fa", fg="#1e1e2e", font=("Arial", 11, "bold"),
+              relief="flat", padx=20, pady=6).pack(pady=5)
 
-tk.Label(root, text="─" * 55, bg="#1e1e2e", fg="#45475a").pack()
+    result_label = tk.Label(root, text="Result will appear here",
+                            font=("Arial", 13), bg="#1e1e2e", fg="#a6e3a1")
+    result_label.pack(pady=10)
 
-tk.Label(root, text="Bulk Analysis:", bg="#1e1e2e", fg="#a6adc8").pack(pady=5)
-tk.Button(root, text="📂 Upload CSV / Excel File", command=analyze_csv,
-          bg="#a6e3a1", fg="#1e1e2e", font=("Arial", 11, "bold"),
-          relief="flat", padx=20, pady=6).pack(pady=5)
+    tk.Label(root, text="─" * 55, bg="#1e1e2e", fg="#45475a").pack()
 
-# Progress Section
-status_label = tk.Label(root, text="Idle", bg="#1e1e2e", fg="#585b70", font=("Arial", 10))
-status_label.pack(pady=(15, 0))
-progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="indeterminate")
-progress_bar.pack(pady=5)
+    tk.Label(root, text="Bulk Analysis:", bg="#1e1e2e", fg="#a6adc8").pack(pady=5)
+    tk.Button(root, text="📂 Upload CSV / Excel File", command=analyze_csv,
+              bg="#a6e3a1", fg="#1e1e2e", font=("Arial", 11, "bold"),
+              relief="flat", padx=20, pady=6).pack(pady=5)
 
-tk.Label(root, text="Powered by VADER",
-         bg="#1e1e2e", fg="#585b70", font=("Arial", 9)).pack(side="bottom", pady=8)
+    status_label = tk.Label(
+        root,
+        text="Idle",
+        bg="#1e1e2e",
+        fg="#585b70",
+        font=("Arial", 10),
+    )
+    status_label.pack(pady=(15, 0))
+    progress_bar = ttk.Progressbar(
+        root,
+        orient="horizontal",
+        length=300,
+        mode="indeterminate",
+    )
+    progress_bar.pack(pady=5)
 
-root.mainloop()
+    tk.Label(root, text="Powered by VADER",
+             bg="#1e1e2e", fg="#585b70", font=("Arial", 9)).pack(side="bottom", pady=8)
+    return root
+
+
+def main():
+    build_gui().mainloop()
+
+
+if __name__ == "__main__":
+    main()
