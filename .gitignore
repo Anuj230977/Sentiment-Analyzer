@@ -5,3 +5,6 @@ dist/
 build/
 *.spec
 test_reviews.csv
+.venv/*
+.pytest_cache/
+dist/
