@@ -1,6 +1,6 @@
 # 💬 Sentiment Analyzer Pro
 
-A Python desktop application that analyzes text sentiment using a modern NLP pipeline. It classifies reviews as **Positive**, **Negative**, or **Neutral** and also extracts the dominant topic behind each review using TF-IDF + NMF topic modeling.
+A Python desktop application that analyzes text sentiment using a modern NLP pipeline. It classifies reviews as **Positive**, **Negative**, or **Neutral** and also extracts the dominant topic behind each review.
 
 Built for local analysis of product feedback, customer reviews, surveys, and support tickets without sending data to a cloud service.
 
@@ -98,13 +98,13 @@ sentiment-analyzer/
 ├── README.md                  # Project overview and usage guide
 ├── CODE_EXPLANATION.md        # Detailed technical walkthrough
 ├── requirements.txt           # Python dependencies
-├── SentimentAnalyzerPro.spec   # PyInstaller build spec
+├── SentimentAnalyzerPro.spec  # PyInstaller build spec
 ├── sample_reviews_v2.csv      # Sample dataset for bulk analysis
 ├── test_reviews.csv           # Small test dataset
 ├── LICENSE                    # MIT license
 ├── .gitignore                 # Ignores output and temporary files
 ├── sentiment_output/          # Auto-generated results folder
-└── .git/                     # Git metadata
+└── .git/                      # Git metadata
 ```
 
 ---
@@ -148,7 +148,7 @@ When a file is analyzed, the app creates a timestamped output folder named `sent
 ## 👤 Author
 
 **Anuj Jadhav**
-- 🎓 TY BBA-CA Student
+- 🎓 BBA-CA Graduate | Full Stack Developer
 - 📧 anuj1230567@gmail.com
 - 💼 [LinkedIn](https://www.linkedin.com/in/anujjadhav)
 - 🐙 [GitHub](https://github.com/Anuj230977)
