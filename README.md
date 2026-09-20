@@ -71,7 +71,26 @@ python analyzer.py
 
 ---
 
-## 📂 Project Structure
+## � Download the Windows EXE
+
+The latest compiled Windows build is published in the GitHub Releases section for direct download:
+
+https://github.com/Anuj230977/sentiment-analyzer/releases
+
+Once a new version is published, the `.exe` appears under the release assets and can be downloaded directly without cloning the repository.
+
+To build the executable locally on Windows:
+
+```powershell
+cd "D:\MY PROJECTS\sentiment-analyzer"
+py -3 -m PyInstaller --onefile --windowed analyzer.py
+```
+
+The generated program will appear in the `dist` folder. After that, you upload the `.exe` to a GitHub Release under "Assets" so users can download it directly.
+
+---
+
+## �📂 Project Structure
 
 ```text
 sentiment-analyzer/
