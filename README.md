@@ -1,30 +1,33 @@
-# 💬 Sentiment Analyzer
+# 💬 Sentiment Analyzer Pro
 
-A Python desktop tool that analyzes the sentiment of text — whether it's **Positive**, **Negative**, or **Neutral** — using Natural Language Processing (NLP).
+A Python desktop application that analyzes text sentiment using a modern NLP pipeline. It classifies reviews as **Positive**, **Negative**, or **Neutral** and also extracts the dominant topic behind each review using TF-IDF + NMF topic modeling.
 
-Built for businesses and individuals who want to understand how people feel about their products, services, or content.
+Built for local analysis of product feedback, customer reviews, surveys, and support tickets without sending data to a cloud service.
 
 ---
 
 ## 🖼️ What It Does
 
-- **Single Text Analysis** — Type or paste any text and get instant sentiment feedback
-- **Bulk CSV / Excel Analysis** — Upload a file with hundreds of reviews and analyze all rows at once
-- **Visual Report** — Generates a pie chart showing the sentiment distribution
-- **Output File** — Saves results as a clean CSV with Sentiment + Polarity Score columns
-- **Simple GUI** — No coding needed, just click and analyze
+- **Single Text Analysis** — Paste any sentence or paragraph and get instant sentiment output
+- **Bulk CSV / Excel Analysis** — Analyze large review files in one click
+- **Column Selection** — Choose the exact text column from uploaded data files
+- **Sentiment Scoring** — Uses VADER to score text on a scale from -1.0 to +1.0
+- **Topic Extraction** — Identifies the main topic behind each review using lightweight topic modeling
+- **Dashboard & Charts** — Generates summary tables, pie charts, histograms, and topic charts
+- **Output Export** — Saves results to CSV and Excel files in a timestamped `sentiment_output` folder
+- **Desktop GUI** — Runs as a local Tkinter app with progress updates and cancel support
 
 ---
 
 ## 📸 Sample Output
 
-| review | Sentiment | Polarity Score |
-|---|---|---|
-| This product is amazing! | Positive | 0.75 |
-| Worst purchase ever | Negative | -1.0 |
-| The delivery was okay | Neutral | 0.0 |
-| I love it so much | Positive | 0.35 |
-| Terrible quality never buying again | Negative | -1.0 |
+| review | Sentiment | Polarity Score | Dominant Topic |
+|---|---|---:|---|
+| This product is amazing! | Positive | 0.636 | product quality |
+| Worst purchase ever | Negative | -0.624 | product defects |
+| The delivery was okay | Neutral | 0.0 | logistics |
+| I love it so much | Positive | 0.669 | customer satisfaction |
+| Terrible quality never buying again | Negative | -0.744 | quality issues |
 
 ---
 
@@ -32,13 +35,14 @@ Built for businesses and individuals who want to understand how people feel abou
 
 | Tool | Purpose |
 |---|---|
-| Python 3.12 | Core language |
-| TextBlob | NLP sentiment analysis |
-| NLTK | Language processing backend |
-| Pandas | CSV/Excel reading and processing |
-| Matplotlib | Pie chart generation |
+| Python 3.10+ | Core language |
+| NLTK VADER | Sentiment scoring and lexical analysis |
+| scikit-learn | TF-IDF + topic extraction with NMF |
+| Pandas | CSV/Excel loading and result management |
+| Matplotlib | PIE, histogram, and topic charts |
 | Tkinter | Desktop GUI |
-| OpenPyXL | Excel file support |
+| OpenPyXL | Excel export support |
+| NumPy | Statistical and chart-related processing |
 
 ---
 
@@ -52,12 +56,12 @@ cd sentiment-analyzer
 
 ### 2. Install dependencies
 ```bash
-pip install textblob nltk pandas matplotlib openpyxl
+pip install -r requirements.txt
 ```
 
-### 3. Download NLTK data (one-time only)
+### 3. Download VADER data (one-time only)
 ```bash
-python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('punkt_tab')"
+python -c "import nltk; nltk.download('vader_lexicon')"
 ```
 
 ### 4. Run the app
@@ -69,37 +73,56 @@ python analyzer.py
 
 ## 📂 Project Structure
 
-```
+```text
 sentiment-analyzer/
-├── analyzer.py          # Main application file
-├── README.md            # Project documentation
-├── CODE_EXPLANATION.md  # Detailed code walkthrough
-└── .gitignore           # Ignores output folders and temp files
+├── analyzer.py                 # Main desktop application
+├── README.md                  # Project overview and usage guide
+├── CODE_EXPLANATION.md        # Detailed technical walkthrough
+├── requirements.txt           # Python dependencies
+├── SentimentAnalyzerPro.spec   # PyInstaller build spec
+├── sample_reviews_v2.csv      # Sample dataset for bulk analysis
+├── test_reviews.csv           # Small test dataset
+├── LICENSE                    # MIT license
+├── .gitignore                 # Ignores output and temporary files
+├── sentiment_output/          # Auto-generated results folder
+└── .git/                     # Git metadata
 ```
 
 ---
 
 ## 💡 Use Cases
 
-- **E-commerce businesses** — Analyze customer reviews in bulk
-- **Restaurants / Hotels** — Understand feedback from review exports
-- **HR Teams** — Analyze employee survey responses
-- **Students** — NLP project for data analytics coursework
-- **Content Creators** — Analyze comment sections from YouTube/Instagram
+- **E-commerce** — Review sentiment analysis for product feedback
+- **Retail / Hospitality** — Customer satisfaction trend analysis
+- **Support Teams** — Complaint extraction from email or ticket text
+- **Students** — NLP project for academic and portfolio use
+- **Product Teams** — Monitor recurring themes in user reviews
 
 ---
 
 ## 📊 How Sentiment Scoring Works
 
-TextBlob assigns a **polarity score** between **-1.0 and +1.0** to every piece of text:
+The project uses **VADER**, which calculates a compound score between **-1.0 and +1.0** for the text:
 
 | Score Range | Sentiment |
 |---|---|
-| > 0.2 | 😊 Positive |
-| -0.2 to 0.2 | 😐 Neutral |
-| < -0.2 | 😠 Negative |
+| > 0.05 | 😊 Positive |
+| -0.05 to 0.05 | 😐 Neutral |
+| < -0.05 | 😠 Negative |
 
-Common neutral words like *"okay", "fine", "alright"* in short phrases are automatically classified as Neutral regardless of score.
+Short phrases containing neutral words like *"okay"*, *"fine"*, *"average"*, and *"alright"* are intentionally treated as **Neutral** when the sentence is short; this makes everyday review wording behave more naturally.
+
+---
+
+## 📦 Output Files
+
+When a file is analyzed, the app creates a timestamped output folder named `sentiment_output` and saves:
+
+- CSV file with review text, sentiment, polarity score, and dominant topic
+- Excel workbook with summary sheets
+- Pie chart image
+- Histogram image
+- Topic-frequency chart image
 
 ---
 
