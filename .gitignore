@@ -8,3 +8,4 @@ test_reviews.csv
 .venv/*
 .pytest_cache/
 dist/
+Test_files/
